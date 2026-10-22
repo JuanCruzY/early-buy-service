@@ -3,9 +3,16 @@ package com.juancruzy.earlybuyservice.subscription.model;
 import java.time.Instant;
 
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 @Document(collection = "subscriptions")
+@CompoundIndex(
+        name = "unique_active_subscription",
+        def = "{'userId': 1, 'articleId': 1}",
+        unique = true,
+        partialFilter = "{'status': 'SUBSCRIBED'}"
+)
 public class Subscription {
 
     @Id
