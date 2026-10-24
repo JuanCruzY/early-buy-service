@@ -9,6 +9,8 @@ public enum ErrorCode {
     INVALID_CONTACT(HttpStatus.BAD_REQUEST, "El dato de contacto no es válido para el canal seleccionado"),
     MISSING_JWT(HttpStatus.UNAUTHORIZED, "Faltan credenciales"),
     INVALID_JWT(HttpStatus.UNAUTHORIZED, "El token es inválido o está expirado"),
+    ACCESS_DENIED(HttpStatus.FORBIDDEN, "El usuario no tiene permiso para realizar esta operación"),
+    AUTH_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "No se pudo validar la sesión con Auth"),
     NOT_OWNER(HttpStatus.FORBIDDEN, "La suscripción no pertenece al usuario autenticado"),
     ARTICLE_NOT_FOUND(HttpStatus.NOT_FOUND, "El artículo no existe"),
     SUBSCRIPTION_NOT_FOUND(HttpStatus.NOT_FOUND, "La suscripción no existe"),
