@@ -5,6 +5,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.test.context.TestComponent;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -31,6 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(GlobalExceptionHandlerTests.ErrorTestController.class)
+@AutoConfigureMockMvc(addFilters = false)
 @Import({GlobalExceptionHandler.class, GlobalExceptionHandlerTests.ErrorTestController.class})
 class GlobalExceptionHandlerTests {
 
@@ -45,6 +48,8 @@ class GlobalExceptionHandlerTests {
             "INVALID_CONTACT, 400",
             "MISSING_JWT, 401",
             "INVALID_JWT, 401",
+            "ACCESS_DENIED, 403",
+            "AUTH_UNAVAILABLE, 503",
             "NOT_OWNER, 403",
             "ARTICLE_NOT_FOUND, 404",
             "SUBSCRIPTION_NOT_FOUND, 404",
@@ -125,6 +130,7 @@ class GlobalExceptionHandlerTests {
     }
 
     @RestController
+    @TestComponent
     @RequestMapping("/test/errors")
     static class ErrorTestController {
 
