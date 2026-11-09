@@ -57,6 +57,7 @@ class GlobalExceptionHandlerTests {
             "ARTICLE_HAS_STOCK, 409",
             "INVALID_STATUS_TRANSITION, 409",
             "TIMEOUT_CATALOG, 503",
+            "CATALOG_UNAVAILABLE, 503",
             "INVALID_REQUEST, 400",
             "INTERNAL_ERROR, 500"
     })

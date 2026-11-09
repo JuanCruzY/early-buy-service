@@ -10,6 +10,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.mongodb.MongoDBContainer;
+import org.testcontainers.containers.GenericContainer;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -23,6 +24,10 @@ class EarlyBuyServiceApplicationTests {
     @Container
     static final MongoDBContainer MONGO = new MongoDBContainer("mongo:6.0");
 
+    @Container
+    static final GenericContainer<?> RABBIT = new GenericContainer<>("rabbitmq:3.13.6-management")
+            .withExposedPorts(5672);
+
     @Autowired
     private MockMvc mockMvc;
 
@@ -30,6 +35,11 @@ class EarlyBuyServiceApplicationTests {
     static void configureMongo(DynamicPropertyRegistry registry) {
         registry.add("spring.mongodb.uri", () -> "mongodb://" + MONGO.getHost()
                 + ":" + MONGO.getMappedPort(27017) + "/earlybuy_application_test");
+        registry.add("spring.rabbitmq.host", RABBIT::getHost);
+        registry.add("spring.rabbitmq.port", () -> RABBIT.getMappedPort(5672));
+        registry.add("spring.rabbitmq.username", () -> "guest");
+        registry.add("spring.rabbitmq.password", () -> "guest");
+        registry.add("spring.rabbitmq.virtual-host", () -> "/");
     }
 
     @Test
