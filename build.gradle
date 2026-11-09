@@ -19,6 +19,7 @@ repositories {
 }
 
 dependencies {
+    implementation 'com.googlecode.libphonenumber:libphonenumber:9.0.43'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.boot:spring-boot-starter-amqp'
     implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
