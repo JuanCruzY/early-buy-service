@@ -22,6 +22,7 @@ import org.springframework.amqp.core.Queue;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import tools.jackson.core.type.TypeReference;
@@ -38,7 +39,8 @@ class CatalogRabbitIntegrationTests extends CatalogRabbitTestSupport {
 
     @Container
     static final GenericContainer<?> RABBIT = new GenericContainer<>("rabbitmq:3.13.6-management")
-            .withExposedPorts(5672);
+            .withExposedPorts(5672)
+            .waitingFor(Wait.forLogMessage(".*Server startup complete.*", 1));
 
     private Channel channel;
 

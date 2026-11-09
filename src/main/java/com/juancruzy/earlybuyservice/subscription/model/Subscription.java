@@ -35,4 +35,14 @@ public class Subscription {
         this.status = SubscriptionStatus.SUBSCRIBED;
         this.createdAt = Instant.now();
     }
+
+    public String getSubscriptionId() { return subscriptionId; }
+    public String getArticleId() { return articleId; }
+    public String getUserId() { return userId; }
+    public String getContact() { return contact; }
+    public NotificationChannel getChannel() { return channel; }
+    public SubscriptionStatus getStatus() { return status; }
+    public Instant getCreatedAt() { return createdAt; }
+    public Instant getCancelledAt() { return cancelledAt; }
+    public Instant getNotifiedAt() { return notifiedAt; }
 }
