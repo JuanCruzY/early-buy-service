@@ -18,6 +18,7 @@ public enum ErrorCode {
     ARTICLE_HAS_STOCK(HttpStatus.CONFLICT, "El artículo ya tiene stock"),
     INVALID_STATUS_TRANSITION(HttpStatus.CONFLICT, "La suscripción no se encuentra en estado suscripto"),
     TIMEOUT_CATALOG(HttpStatus.SERVICE_UNAVAILABLE, "Catalog no respondió dentro del tiempo esperado"),
+    CATALOG_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "No se pudo validar el artículo con Catalog"),
     INVALID_REQUEST(HttpStatus.BAD_REQUEST, "La solicitud no es válida"),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "Ocurrió un error interno en el servicio");
 
