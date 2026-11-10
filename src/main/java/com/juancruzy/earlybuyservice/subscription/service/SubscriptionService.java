@@ -1,10 +1,13 @@
 package com.juancruzy.earlybuyservice.subscription.service;
 
+import java.util.List;
+
 import com.juancruzy.earlybuyservice.catalog.service.CatalogValidationService;
 import com.juancruzy.earlybuyservice.shared.exception.ApplicationException;
 import com.juancruzy.earlybuyservice.shared.exception.ErrorCode;
 import com.juancruzy.earlybuyservice.subscription.dto.CreateSubscriptionRequest;
 import com.juancruzy.earlybuyservice.subscription.dto.SubscriptionResponse;
+import com.juancruzy.earlybuyservice.subscription.dto.SubscriptionSummaryResponse;
 import com.juancruzy.earlybuyservice.subscription.model.NotificationChannel;
 import com.juancruzy.earlybuyservice.subscription.model.Subscription;
 import com.juancruzy.earlybuyservice.subscription.model.SubscriptionStatus;
@@ -56,6 +59,13 @@ public class SubscriptionService {
             }
             throw exception;
         }
+    }
+
+    public List<SubscriptionSummaryResponse> findActiveSubscriptions(String userId) {
+        return repository.findAllByUserIdAndStatus(userId, SubscriptionStatus.SUBSCRIBED)
+                .stream()
+                .map(SubscriptionSummaryResponse::from)
+                .toList();
     }
 
     private boolean missing(String value) {
