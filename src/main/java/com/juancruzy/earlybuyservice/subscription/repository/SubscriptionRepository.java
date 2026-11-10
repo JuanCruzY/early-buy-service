@@ -6,7 +6,7 @@ import com.juancruzy.earlybuyservice.subscription.model.Subscription;
 import com.juancruzy.earlybuyservice.subscription.model.SubscriptionStatus;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
-public interface SubscriptionRepository extends MongoRepository<Subscription, String> {
+public interface SubscriptionRepository extends MongoRepository<Subscription, String>, SubscriptionCancellationRepository {
 
     List<Subscription> findAllByUserIdAndStatus(String userId, SubscriptionStatus status);
 

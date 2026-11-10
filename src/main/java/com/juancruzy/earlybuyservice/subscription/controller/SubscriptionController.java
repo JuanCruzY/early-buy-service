@@ -12,6 +12,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
@@ -32,6 +34,14 @@ public class SubscriptionController {
     public SubscriptionResponse subscribe(@AuthenticationPrincipal AuthenticatedUser user,
                                           @RequestBody(required = false) CreateSubscriptionRequest request) {
         return service.subscribe(user.id(), request);
+    }
+
+    @DeleteMapping("/{subscriptionId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Cancelar una suscripción activa del usuario autenticado")
+    public void cancel(@AuthenticationPrincipal AuthenticatedUser user,
+                       @PathVariable String subscriptionId) {
+        service.cancel(user.id(), subscriptionId);
     }
 
     @GetMapping

@@ -1,6 +1,10 @@
 package com.juancruzy.earlybuyservice.subscription.model;
 
 import java.time.Instant;
+import java.util.Objects;
+
+import com.juancruzy.earlybuyservice.shared.exception.ApplicationException;
+import com.juancruzy.earlybuyservice.shared.exception.ErrorCode;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.CompoundIndex;
@@ -34,6 +38,14 @@ public class Subscription {
         this.channel = channel;
         this.status = SubscriptionStatus.SUBSCRIBED;
         this.createdAt = Instant.now();
+    }
+
+    public void cancel(Instant cancelledAt) {
+        if (status != SubscriptionStatus.SUBSCRIBED) {
+            throw new ApplicationException(ErrorCode.INVALID_STATUS_TRANSITION);
+        }
+        this.cancelledAt = Objects.requireNonNull(cancelledAt, "cancelledAt must not be null");
+        this.status = SubscriptionStatus.CANCELLED;
     }
 
     public String getSubscriptionId() { return subscriptionId; }
