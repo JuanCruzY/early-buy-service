@@ -11,6 +11,8 @@ import com.juancruzy.earlybuyservice.shared.exception.ApplicationException;
 import com.juancruzy.earlybuyservice.shared.exception.ErrorCode;
 import com.juancruzy.earlybuyservice.subscription.dto.CreateSubscriptionRequest;
 import com.juancruzy.earlybuyservice.subscription.model.SubscriptionStatus;
+import com.juancruzy.earlybuyservice.subscription.model.Subscription;
+import com.juancruzy.earlybuyservice.subscription.model.NotificationChannel;
 import com.juancruzy.earlybuyservice.subscription.repository.SubscriptionRepository;
 import com.juancruzy.earlybuyservice.subscription.validation.ContactValidator;
 import jakarta.validation.Validation;
@@ -36,6 +38,7 @@ import org.testcontainers.mongodb.MongoDBContainer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @DataMongoTest
 @Import({SubscriptionService.class, ContactValidator.class, SubscriptionPersistenceTests.ValidationConfig.class})
@@ -76,6 +79,26 @@ class SubscriptionPersistenceTests {
         var second = service.subscribe("user", new CreateSubscriptionRequest(ARTICLE, "PUSH", "opaque-token"));
         assertThat(second.subscriptionId()).isNotEqualTo(first.subscriptionId());
         assertThat(repository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void listsOnlyTheOwnersActiveSubscriptions() {
+        var active = repository.insert(new Subscription(ARTICLE, "owner", "user@example.com", NotificationChannel.EMAIL));
+        repository.insert(new Subscription(ARTICLE, "other-user", "other@example.com", NotificationChannel.EMAIL));
+        for (var status : List.of(SubscriptionStatus.CANCELLED, SubscriptionStatus.NOTIFIED)) {
+            var historical = new Subscription("other-article-" + status, "owner", "device", NotificationChannel.PUSH);
+            org.springframework.test.util.ReflectionTestUtils.setField(historical, "status", status);
+            repository.insert(historical);
+        }
+        var results = service.findActiveSubscriptions("owner");
+        assertThat(results).singleElement().satisfies(result -> {
+            assertThat(result.subscriptionId()).isEqualTo(active.getSubscriptionId());
+            assertThat(result.articleId()).isEqualTo(ARTICLE);
+            assertThat(result.channel()).isEqualTo(NotificationChannel.EMAIL);
+            assertThat(result.contact()).isEqualTo("user@example.com");
+        });
+        assertThat(service.findActiveSubscriptions("unknown-user")).isEmpty();
+        verifyNoInteractions(catalog);
     }
 
     @Test
