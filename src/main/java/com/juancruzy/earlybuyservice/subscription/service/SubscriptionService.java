@@ -1,6 +1,7 @@
 package com.juancruzy.earlybuyservice.subscription.service;
 
 import java.util.List;
+import java.time.Instant;
 
 import com.juancruzy.earlybuyservice.catalog.service.CatalogValidationService;
 import com.juancruzy.earlybuyservice.shared.exception.ApplicationException;
@@ -66,6 +67,29 @@ public class SubscriptionService {
                 .stream()
                 .map(SubscriptionSummaryResponse::from)
                 .toList();
+    }
+
+    public void cancel(String userId, String subscriptionId) {
+        if (subscriptionId == null || !ObjectId.isValid(subscriptionId)) {
+            throw new ApplicationException(ErrorCode.SUBSCRIPTION_NOT_FOUND);
+        }
+        String normalizedId = new ObjectId(subscriptionId).toHexString();
+        Subscription subscription = findOwnedSubscription(userId, normalizedId);
+        subscription.cancel(Instant.now());
+        if (!repository.cancelIfSubscribed(normalizedId, userId, subscription.getCancelledAt())) {
+            // Re-read to distinguish deletion, ownership and state changes since the initial read.
+            findOwnedSubscription(userId, normalizedId);
+            throw new ApplicationException(ErrorCode.INVALID_STATUS_TRANSITION);
+        }
+    }
+
+    private Subscription findOwnedSubscription(String userId, String subscriptionId) {
+        Subscription subscription = repository.findById(subscriptionId)
+                .orElseThrow(() -> new ApplicationException(ErrorCode.SUBSCRIPTION_NOT_FOUND));
+        if (!subscription.getUserId().equals(userId)) {
+            throw new ApplicationException(ErrorCode.NOT_OWNER);
+        }
+        return subscription;
     }
 
     private boolean missing(String value) {

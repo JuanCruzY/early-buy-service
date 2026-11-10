@@ -102,6 +102,61 @@ class SubscriptionPersistenceTests {
     }
 
     @Test
+    void cancellationPreservesDocumentRemovesItFromActiveResultsAndAllowsResubscription() {
+        var created = service.subscribe("owner", new CreateSubscriptionRequest(ARTICLE, "EMAIL", "user@example.com"));
+        service.cancel("owner", created.subscriptionId());
+        var cancelled = repository.findById(created.subscriptionId()).orElseThrow();
+        assertThat(cancelled.getStatus()).isEqualTo(SubscriptionStatus.CANCELLED);
+        assertThat(cancelled.getCancelledAt()).isNotNull();
+        assertThat(cancelled.getNotifiedAt()).isNull();
+        assertThat(cancelled.getCreatedAt()).isEqualTo(created.createdAt().truncatedTo(java.time.temporal.ChronoUnit.MILLIS));
+        assertThat(service.findActiveSubscriptions("owner")).isEmpty();
+        var next = service.subscribe("owner", new CreateSubscriptionRequest(ARTICLE, "PUSH", "device"));
+        assertThat(next.subscriptionId()).isNotEqualTo(created.subscriptionId());
+        assertThat(repository.count()).isEqualTo(2);
+    }
+
+    @Test
+    void twoConcurrentCancellationsHaveExactlyOneWinner() throws Exception {
+        var created = service.subscribe("owner", new CreateSubscriptionRequest(ARTICLE, "EMAIL", "user@example.com"));
+        var barrier = new CyclicBarrier(2);
+        try (var executor = Executors.newFixedThreadPool(2)) {
+            java.util.concurrent.Callable<String> cancel = () -> {
+                barrier.await(10, TimeUnit.SECONDS);
+                try {
+                    service.cancel("owner", created.subscriptionId());
+                    return "CANCELLED";
+                } catch (ApplicationException exception) {
+                    return exception.getErrorCode().name();
+                }
+            };
+            var first = executor.submit(cancel);
+            var second = executor.submit(cancel);
+            assertThat(List.of(first.get(20, TimeUnit.SECONDS), second.get(20, TimeUnit.SECONDS)))
+                    .containsExactlyInAnyOrder("CANCELLED", "INVALID_STATUS_TRANSITION");
+        }
+        var stored = repository.findById(created.subscriptionId()).orElseThrow();
+        var originalDate = stored.getCancelledAt();
+        assertThat(originalDate).isNotNull();
+        assertThat(repository.cancelIfSubscribed(created.subscriptionId(), "owner", java.time.Instant.now())).isFalse();
+        assertThat(repository.findById(created.subscriptionId()).orElseThrow().getCancelledAt()).isEqualTo(originalDate);
+    }
+
+    @Test
+    void conditionalCancellationDoesNotOverwriteNotifiedStateOrAnotherOwnersDocument() {
+        var created = service.subscribe("owner", new CreateSubscriptionRequest(ARTICLE, "EMAIL", "user@example.com"));
+        assertThat(repository.cancelIfSubscribed(created.subscriptionId(), "intruder", java.time.Instant.now())).isFalse();
+        var notifiedAt = java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+        mongo.updateFirst(Query.query(Criteria.where("subscriptionId").is(created.subscriptionId())),
+                new Update().set("status", SubscriptionStatus.NOTIFIED).set("notifiedAt", notifiedAt), Subscription.class);
+        assertThat(repository.cancelIfSubscribed(created.subscriptionId(), "owner", java.time.Instant.now())).isFalse();
+        var stored = repository.findById(created.subscriptionId()).orElseThrow();
+        assertThat(stored.getStatus()).isEqualTo(SubscriptionStatus.NOTIFIED);
+        assertThat(stored.getNotifiedAt()).isEqualTo(notifiedAt);
+        assertThat(stored.getCancelledAt()).isNull();
+    }
+
+    @Test
     void concurrentRequestsCreateOneSubscriptionAndReturnOneBusinessConflict() throws Exception {
         var barrier = new CyclicBarrier(2);
         when(catalog.validateForSubscription(ARTICLE)).thenAnswer(call -> {
