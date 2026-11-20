@@ -33,10 +33,13 @@ public class NotificationPublisher {
     }
 
     public CompletableFuture<Void> publish(NotificationChannel channel, NotificationRequest notification,
-                                           String correlationId) {
+                                           String correlationId, String messageId) {
         Objects.requireNonNull(notification, "notification");
         if (correlationId == null || correlationId.isBlank()) {
             throw new IllegalArgumentException("correlationId is required");
+        }
+        if (messageId == null || messageId.isBlank()) {
+            throw new IllegalArgumentException("messageId is required");
         }
 
         String routingKey = switch (channel) {
@@ -49,6 +52,7 @@ public class NotificationPublisher {
         properties.setContentType(MessageProperties.CONTENT_TYPE_JSON);
         properties.setDeliveryMode(MessageDeliveryMode.PERSISTENT);
         properties.setCorrelationId(correlationId);
+        properties.setMessageId(messageId);
         // Several notifications can share one event correlationId. Each publish needs its own confirm ID.
         var confirmation = new CorrelationData(UUID.randomUUID().toString());
 

@@ -30,8 +30,8 @@ class NotificationPublisherTests {
     @Test
     void independentlyConfirmsPublicationsThatShareTheSameEventCorrelationId() {
         var publisher = publisher(Duration.ofSeconds(5));
-        var mail = publisher.publish(NotificationChannel.EMAIL, request, "one-stock-event");
-        var sms = publisher.publish(NotificationChannel.SMS, request, "one-stock-event");
+        var mail = publisher.publish(NotificationChannel.EMAIL, request, "one-stock-event", "subscription-1");
+        var sms = publisher.publish(NotificationChannel.SMS, request, "one-stock-event", "subscription-2");
         var confirmations = ArgumentCaptor.forClass(CorrelationData.class);
         var messages = ArgumentCaptor.forClass(Message.class);
         verify(template, times(2)).send(eq("notifications"), anyString(), messages.capture(), confirmations.capture());
@@ -51,7 +51,8 @@ class NotificationPublisherTests {
 
     @Test
     void failsIfConfirmationDoesNotArriveBeforeTheDeadline() {
-        var result = publisher(Duration.ofMillis(20)).publish(NotificationChannel.PUSH, request, "stock-event");
+        var result = publisher(Duration.ofMillis(20)).publish(
+                NotificationChannel.PUSH, request, "stock-event", "subscription");
         assertThatThrownBy(result::join).hasCauseInstanceOf(NotificationPublishException.class)
                 .hasRootCauseInstanceOf(TimeoutException.class);
     }
@@ -60,7 +61,8 @@ class NotificationPublisherTests {
     void reportsConnectionFailureToTheCaller() {
         var error = new AmqpConnectException(new java.net.ConnectException("broker unavailable"));
         doThrow(error).when(template).send(anyString(), anyString(), any(Message.class), any(CorrelationData.class));
-        var result = publisher(Duration.ofSeconds(5)).publish(NotificationChannel.EMAIL, request, "stock-event");
+        var result = publisher(Duration.ofSeconds(5)).publish(
+                NotificationChannel.EMAIL, request, "stock-event", "subscription");
         assertThatThrownBy(result::join).hasCauseInstanceOf(NotificationPublishException.class)
                 .hasRootCauseInstanceOf(java.net.ConnectException.class);
     }

@@ -41,7 +41,8 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 @DataMongoTest
-@Import({SubscriptionService.class, ContactValidator.class, SubscriptionPersistenceTests.ValidationConfig.class})
+@Import({SubscriptionService.class, SubscriptionOperationLock.class, ContactValidator.class,
+        SubscriptionPersistenceTests.ValidationConfig.class})
 @Testcontainers
 class SubscriptionPersistenceTests {
     private static final String ARTICLE = "507f1f77bcf86cd799439011";
