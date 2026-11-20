@@ -15,6 +15,7 @@ import com.juancruzy.earlybuyservice.subscription.model.Subscription;
 import com.juancruzy.earlybuyservice.subscription.model.SubscriptionStatus;
 import com.juancruzy.earlybuyservice.subscription.repository.SubscriptionRepository;
 import com.juancruzy.earlybuyservice.subscription.service.SubscriptionService;
+import com.juancruzy.earlybuyservice.subscription.service.SubscriptionOperationLock;
 import com.juancruzy.earlybuyservice.subscription.validation.ContactValidator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,7 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @WebMvcTest(SubscriptionController.class)
 @Import({SecurityConfig.class, AuthAuthenticationProvider.class, SecurityErrorHandler.class,
-        SubscriptionService.class, ContactValidator.class})
+        SubscriptionService.class, SubscriptionOperationLock.class, ContactValidator.class})
 class CreateSubscriptionTests {
     private static final String ARTICLE = "507f1f77bcf86cd799439011";
     @Autowired MockMvc mvc;

@@ -23,12 +23,14 @@ public class SubscriptionService {
     private final SubscriptionRepository repository;
     private final CatalogValidationService catalog;
     private final ContactValidator contacts;
+    private final SubscriptionOperationLock operations;
 
     public SubscriptionService(SubscriptionRepository repository, CatalogValidationService catalog,
-                               ContactValidator contacts) {
+                               ContactValidator contacts, SubscriptionOperationLock operations) {
         this.repository = repository;
         this.catalog = catalog;
         this.contacts = contacts;
+        this.operations = operations;
     }
 
     public SubscriptionResponse subscribe(String userId, CreateSubscriptionRequest request) {
@@ -74,6 +76,10 @@ public class SubscriptionService {
             throw new ApplicationException(ErrorCode.SUBSCRIPTION_NOT_FOUND);
         }
         String normalizedId = new ObjectId(subscriptionId).toHexString();
+        operations.run(normalizedId, () -> cancelActiveSubscription(userId, normalizedId));
+    }
+
+    private void cancelActiveSubscription(String userId, String normalizedId) {
         Subscription subscription = findOwnedSubscription(userId, normalizedId);
         subscription.cancel(Instant.now());
         if (!repository.cancelIfSubscribed(normalizedId, userId, subscription.getCancelledAt())) {

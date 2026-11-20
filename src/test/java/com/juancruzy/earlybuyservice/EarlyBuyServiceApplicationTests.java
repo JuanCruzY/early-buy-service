@@ -1,19 +1,29 @@
 package com.juancruzy.earlybuyservice;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
+import com.juancruzy.earlybuyservice.catalog.dto.StockChangedEvent;
 import com.juancruzy.earlybuyservice.notification.dto.NotificationRequest;
 import com.juancruzy.earlybuyservice.notification.publisher.NotificationPublisher;
 import com.juancruzy.earlybuyservice.notification.publisher.NotificationPublishException;
 import com.juancruzy.earlybuyservice.subscription.model.NotificationChannel;
+import com.juancruzy.earlybuyservice.subscription.model.Subscription;
+import com.juancruzy.earlybuyservice.subscription.model.SubscriptionStatus;
+import com.juancruzy.earlybuyservice.subscription.repository.SubscriptionRepository;
+import com.juancruzy.earlybuyservice.subscription.service.SubscriptionService;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.amqp.core.AmqpAdmin;
-import org.springframework.amqp.core.AnonymousQueue;
 import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
+import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageDeliveryMode;
+import org.springframework.amqp.core.MessageProperties;
+import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -28,9 +38,11 @@ import org.testcontainers.mongodb.MongoDBContainer;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
 import tools.jackson.databind.ObjectMapper;
+import org.bson.types.ObjectId;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -55,6 +67,8 @@ class EarlyBuyServiceApplicationTests {
     @Autowired private AmqpAdmin amqpAdmin;
     @Autowired private DirectExchange notificationExchange;
     @Autowired private ObjectMapper objectMapper;
+    @Autowired private SubscriptionRepository subscriptions;
+    @Autowired private SubscriptionService subscriptionService;
     @Autowired @Qualifier("notificationRabbitTemplate")
     private RabbitTemplate notificationRabbitTemplate;
 
@@ -95,12 +109,13 @@ class EarlyBuyServiceApplicationTests {
         var queue = bindNotificationQueue(routingKey);
         try {
             notificationPublisher.publish(channel, new NotificationRequest("article", "user", 25, "test-contact"),
-                    "stock-event-1").get(10, TimeUnit.SECONDS);
+                    "stock-event-1", "subscription-1").get(10, TimeUnit.SECONDS);
             var delivery = notificationRabbitTemplate.receive(queue.getName(), 2000);
             assertThat(delivery).isNotNull();
             var metadata = delivery.getMessageProperties();
             assertThat(metadata.getReceivedRoutingKey()).isEqualTo(routingKey);
             assertThat(metadata.getCorrelationId()).isEqualTo("stock-event-1");
+            assertThat(metadata.getMessageId()).isEqualTo("subscription-1");
             assertThat(metadata.getReceivedDeliveryMode()).isEqualTo(MessageDeliveryMode.PERSISTENT);
             assertThat(metadata.getContentType()).isEqualTo("application/json");
             assertThat(objectMapper.readTree(delivery.getBody())).isEqualTo(objectMapper.readTree("""
@@ -116,7 +131,7 @@ class EarlyBuyServiceApplicationTests {
         var queue = bindNotificationQueue("mail.notify");
         try {
             var publication = notificationPublisher.publish(NotificationChannel.SMS,
-                    new NotificationRequest("article", "user", 25, "+5491123456789"), "stock-event-1");
+                    new NotificationRequest("article", "user", 25, "+5491123456789"), "stock-event-1", "subscription-1");
             assertThatThrownBy(() -> publication.get(10, TimeUnit.SECONDS))
                     .hasCauseInstanceOf(NotificationPublishException.class)
                     .hasMessageContaining("no pudo enrutar");
@@ -126,11 +141,102 @@ class EarlyBuyServiceApplicationTests {
         }
     }
 
-    private AnonymousQueue bindNotificationQueue(String routingKey) {
-        var queue = new AnonymousQueue();
+    private Queue bindNotificationQueue(String routingKey) {
+        // Timed receives create and cancel a consumer. Keep the queue for subsequent receives.
+        var queue = new Queue("test.notifications." + UUID.randomUUID(), false, true, false);
         amqpAdmin.declareQueue(queue);
         amqpAdmin.declareBinding(BindingBuilder.bind(queue).to(notificationExchange).with(routingKey));
         return queue;
+    }
+
+    @Test
+    void consumesStockEventsWithoutNotifyingCancelledOrAlreadyNotifiedSubscriptions() {
+        String articleId = new ObjectId().toHexString();
+        var active = subscriptions.insert(new Subscription(articleId, "active", "active@example.com",
+                NotificationChannel.EMAIL));
+        var cancelled = subscriptions.insert(new Subscription(articleId, "cancelled", "cancelled@example.com",
+                NotificationChannel.EMAIL));
+        subscriptionService.cancel(cancelled.getUserId(), cancelled.getSubscriptionId());
+        var mail = bindNotificationQueue("mail.notify");
+        try {
+            sendStockEvent(new StockChangedEvent(UUID.randomUUID(), articleId, 0, Instant.now()), "no-stock");
+            var replenishment = new StockChangedEvent(UUID.randomUUID(), articleId, 25, Instant.now());
+            sendStockEvent(replenishment, "restock");
+            var first = notificationRabbitTemplate.receive(mail.getName(), 8000);
+            assertThat(first).isNotNull();
+            assertThat(first.getMessageProperties().getMessageId()).isEqualTo(active.getSubscriptionId());
+            assertThat(first.getMessageProperties().getCorrelationId()).isEqualTo("restock");
+            assertThat(objectMapper.readTree(first.getBody())).isEqualTo(objectMapper.readTree("""
+                    {"articleId":"%s","userId":"active","currentStock":25,"contact":"active@example.com"}
+                    """.formatted(articleId)));
+            assertNotified(active);
+
+            sendStockEvent(replenishment, "restock");
+            // A later event for another article proves that the duplicate was processed and acknowledged.
+            String nextArticle = new ObjectId().toHexString();
+            var next = subscriptions.insert(new Subscription(nextArticle, "next", "next@example.com",
+                    NotificationChannel.EMAIL));
+            var nextEvent = new StockChangedEvent(UUID.randomUUID(), nextArticle, 5, Instant.now());
+            sendStockEvent(nextEvent, null);
+            var second = notificationRabbitTemplate.receive(mail.getName(), 8000);
+            assertThat(second).isNotNull();
+            assertThat(second.getMessageProperties().getMessageId()).isEqualTo(next.getSubscriptionId());
+            assertThat(second.getMessageProperties().getCorrelationId()).isEqualTo(nextEvent.eventId().toString());
+            assertNotified(next);
+            assertThat(subscriptions.findById(cancelled.getSubscriptionId()).orElseThrow().getStatus())
+                    .isEqualTo(SubscriptionStatus.CANCELLED);
+        } finally {
+            amqpAdmin.deleteQueue(mail.getName());
+        }
+    }
+
+    @Test
+    void retriesFailedChannelWithoutSendingAgainToConfirmedSubscribers() {
+        String articleId = new ObjectId().toHexString();
+        var email = subscriptions.insert(new Subscription(articleId, "email", "email@example.com",
+                NotificationChannel.EMAIL));
+        var phone = subscriptions.insert(new Subscription(articleId, "phone", "+5491123456789",
+                NotificationChannel.SMS));
+        var mail = bindNotificationQueue("mail.notify");
+        try {
+            sendStockEvent(new StockChangedEvent(UUID.randomUUID(), articleId, 25, Instant.now()), "partial");
+            var first = notificationRabbitTemplate.receive(mail.getName(), 8000);
+            assertThat(first).isNotNull();
+            assertThat(first.getMessageProperties().getMessageId()).isEqualTo(email.getSubscriptionId());
+            assertNotified(email);
+            assertThat(subscriptions.findById(phone.getSubscriptionId()).orElseThrow().getStatus())
+                    .isEqualTo(SubscriptionStatus.SUBSCRIBED);
+
+            var sms = bindNotificationQueue("sms.notify");
+            try {
+                var recovered = notificationRabbitTemplate.receive(sms.getName(), 15000);
+                assertThat(recovered).isNotNull();
+                assertThat(recovered.getMessageProperties().getMessageId()).isEqualTo(phone.getSubscriptionId());
+                assertThat(recovered.getMessageProperties().getCorrelationId()).isEqualTo("partial");
+                assertNotified(phone);
+                assertThat(notificationRabbitTemplate.receive(mail.getName())).isNull();
+            } finally {
+                amqpAdmin.deleteQueue(sms.getName());
+            }
+        } finally {
+            amqpAdmin.deleteQueue(mail.getName());
+        }
+    }
+
+    private void sendStockEvent(StockChangedEvent event, String correlationId) {
+        var properties = new MessageProperties();
+        properties.setContentType(MessageProperties.CONTENT_TYPE_JSON);
+        properties.setCorrelationId(correlationId);
+        notificationRabbitTemplate.send(StockChangedEvent.EXCHANGE, StockChangedEvent.ROUTING_KEY,
+                new Message(objectMapper.writeValueAsBytes(event), properties));
+    }
+
+    private void assertNotified(Subscription subscription) {
+        await().atMost(Duration.ofSeconds(8)).untilAsserted(() -> {
+            var saved = subscriptions.findById(subscription.getSubscriptionId()).orElseThrow();
+            assertThat(saved.getStatus()).isEqualTo(SubscriptionStatus.NOTIFIED);
+            assertThat(saved.getNotifiedAt()).isNotNull();
+        });
     }
 
 }
