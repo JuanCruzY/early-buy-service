@@ -3,7 +3,7 @@
 `CatalogValidationService.validateForSubscription(articleId)` valida el formato del ID,
 lo normaliza a hexadecimal en minúsculas y consulta Catalog por RabbitMQ.
 Devuelve `CatalogArticleStatus` si el artículo está habilitado y su stock es menor o igual a cero.
-El caso de uso de creación de suscripciones utilizará este servicio antes de guardar.
+El caso de uso de creación de suscripciones utiliza este servicio antes de guardar.
 
 ## Contrato Go
 

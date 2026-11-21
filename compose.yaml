@@ -1,0 +1,30 @@
+services:
+  early-buy:
+    build: .
+    image: early-buy-service:local
+    ports:
+      - "${EARLYBUY_PORT:-3005}:3005"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      SERVER_PORT: "3005"
+      MONGODB_URI: "${MONGODB_URI:-mongodb://host.docker.internal:27017/earlybuy}"
+      RABBITMQ_HOST: "${RABBITMQ_HOST:-host.docker.internal}"
+      RABBITMQ_PORT: "${RABBITMQ_PORT:-5672}"
+      RABBITMQ_USERNAME: "${RABBITMQ_USERNAME:-guest}"
+      RABBITMQ_PASSWORD: "${RABBITMQ_PASSWORD:-guest}"
+      RABBITMQ_VIRTUAL_HOST: "${RABBITMQ_VIRTUAL_HOST:-/}"
+      AUTH_BASE_URL: "${AUTH_BASE_URL:-http://host.docker.internal:3000}"
+      AUTH_CONNECT_TIMEOUT: "${AUTH_CONNECT_TIMEOUT:-1s}"
+      AUTH_READ_TIMEOUT: "${AUTH_READ_TIMEOUT:-3s}"
+      RABBITMQ_CONNECTION_TIMEOUT: "${RABBITMQ_CONNECTION_TIMEOUT:-3s}"
+      RABBITMQ_CHANNEL_RPC_TIMEOUT: "${RABBITMQ_CHANNEL_RPC_TIMEOUT:-3s}"
+      CATALOG_VALIDATION_TIMEOUT: "${CATALOG_VALIDATION_TIMEOUT:-5s}"
+      CATALOG_MAX_PENDING_REQUESTS: "${CATALOG_MAX_PENDING_REQUESTS:-256}"
+      NOTIFICATION_CONFIRMATION_TIMEOUT: "${NOTIFICATION_CONFIRMATION_TIMEOUT:-5s}"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3005/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      start_period: 40s
+      retries: 4
