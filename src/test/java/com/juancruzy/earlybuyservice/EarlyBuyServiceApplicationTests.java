@@ -92,7 +92,15 @@ class EarlyBuyServiceApplicationTests {
         mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.type").value("http"))
-                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"));
+                .andExpect(jsonPath("$.components.securitySchemes.bearerAuth.scheme").value("bearer"))
+                .andExpect(jsonPath("$.paths['/v1/subscriptions'].post.responses['201'].content['application/json'].example.subscriptionId").exists())
+                .andExpect(jsonPath("$.paths['/v1/subscriptions'].post.responses['503'].content['application/json'].examples.TIMEOUT_CATALOG.value.code").value("TIMEOUT_CATALOG"))
+                .andExpect(jsonPath("$.paths['/v1/subscriptions/{subscriptionId}'].delete.responses['403'].content['application/json'].examples.NOT_OWNER.value.code").value("NOT_OWNER"))
+                .andExpect(jsonPath("$.paths['/v1/subscriptions'].post.responses['400'].content['application/json'].examples.MISSING_FIELDS.value.code").value("MISSING_FIELDS"))
+                .andExpect(jsonPath("$.paths['/v1/subscriptions'].post.requestBody.required").value(true))
+                .andExpect(jsonPath("$.paths['/v1/subscriptions'].get.responses['200'].content['application/json'].schema.type").value("array"))
+                .andExpect(jsonPath("$.paths['/v1/subscriptions/{subscriptionId}'].delete.responses['204'].content").doesNotExist())
+                .andExpect(jsonPath("$.components.schemas.ApiError.properties.code").exists());
     }
 
     @Test
