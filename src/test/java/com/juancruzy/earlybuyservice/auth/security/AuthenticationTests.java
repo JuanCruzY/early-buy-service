@@ -50,6 +50,38 @@ class AuthenticationTests {
     private AuthClient authClient;
 
     @Test
+    void allowsReactToSendAnAuthenticatedDelete() throws Exception {
+        mockMvc.perform(options("/v1/subscriptions/subscription-1")
+                        .header(HttpHeaders.ORIGIN, "http://localhost:4200")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "DELETE")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "authorization"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:4200"))
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_HEADERS, "authorization"));
+        verifyNoInteractions(authClient);
+    }
+
+    @Test
+    void permitsReactToReadAnAuthenticationError() throws Exception {
+        mockMvc.perform(get("/v1/subscriptions").header(HttpHeaders.ORIGIN, "http://localhost:4200"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "http://localhost:4200"))
+                .andExpect(jsonPath("$.code").value("MISSING_JWT"));
+        verifyNoInteractions(authClient);
+    }
+
+    @Test
+    void deniesPreflightFromAnotherOrigin() throws Exception {
+        mockMvc.perform(options("/v1/subscriptions")
+                        .header(HttpHeaders.ORIGIN, "https://example.com")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_METHOD, "POST")
+                        .header(HttpHeaders.ACCESS_CONTROL_REQUEST_HEADERS, "authorization,content-type"))
+                .andExpect(status().isForbidden())
+                .andExpect(header().doesNotExist(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN));
+        verifyNoInteractions(authClient);
+    }
+
+    @Test
     void rejectsMissingCredentialsBeforeCallingAuth() throws Exception {
         mockMvc.perform(get("/v1/subscriptions"))
                 .andExpect(status().isUnauthorized())
